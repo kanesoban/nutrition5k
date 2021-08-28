@@ -1,0 +1,15 @@
+name: nutrition5k
+dependencies:
+  - python=3.8
+  - pip
+  - numpy
+  - matplotlib
+  - torchvision
+  - pytorch
+  - jupyterlab
+  - tqdm
+  - scikit-image
+  - pandas
+  - pip:
+      - ffmpeg
+      - opencv_python
