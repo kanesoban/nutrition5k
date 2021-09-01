@@ -58,12 +58,13 @@ class Nutrition5kDataset(Dataset):
         self.transform = transform
         csv_files = [os.path.join(root_dir, 'metadata', 'dish_metadata_cafe1.csv'),
                      os.path.join(root_dir, 'metadata', 'dish_metadata_cafe2.csv')]
-        dish_metadata = {'dish_id': [], 'calories': []}
+        dish_metadata = {'dish_id': [], 'mass': [], 'calories': []}
         for csv_file in csv_files:
             with open(csv_file, "r") as f:
                 for line in f.readlines():
                     parts = line.split(',')
                     dish_metadata['dish_id'].append(parts[0])
+                    dish_metadata['mass'].append(parts[1])
                     dish_metadata['calories'].append(int(float(parts[2])))
 
         self.dish_calories = pd.DataFrame.from_dict(dish_metadata)
