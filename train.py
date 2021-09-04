@@ -8,7 +8,7 @@ from tqdm import tqdm
 import yaml
 
 from nutrition5k.dataset import Rescale, ToTensor, Nutrition5kDataset
-from nutrition5k.model import create_model
+from nutrition5k.model import Nutrition5kModel
 
 
 def parse_args():
@@ -41,7 +41,7 @@ if __name__ == '__main__':
 
     # Detect if we have a GPU available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = create_model(train=True, device=device).float()
+    model = Nutrition5kModel().to(device)
 
     optimizer = torch.optim.SGD(model.parameters(), lr=config['learning_rate'])
     criterion = torch.nn.L1Loss()
@@ -61,7 +61,6 @@ if __name__ == '__main__':
                 calories = batch['calories'].to(device)
 
                 single_input = inputs.shape[0] == 1
-                #single_input = False
                 # Training will not work with bs == 1, so we do a 'hack'
                 if single_input:
                     dummy_tensor = torch.zeros(batch['image'][:1].shape)
@@ -75,26 +74,36 @@ if __name__ == '__main__':
                 # forward
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
+                    # Calculate actual targets
+                    targets = torch.squeeze(torch.cat([mass, calories], axis=1))
+                    if len(targets.shape) == 1:
+                        targets = torch.unsqueeze(targets, 0)
+
                     if phase == 'train':
+                        # Calculate predictions
                         outputs, aux_outputs = model(inputs.float())
                         if single_input:
-                            outputs = outputs[:1]
+                            outputs = [outputs[0][:1], outputs[1][:1]]
                         outputs = torch.cat(outputs, axis=1)
-                        targets = torch.squeeze(torch.cat([mass, calories], axis=1))
-                        #if len(targets.shape) == 1:
-                        #    targets = torch.unsqueeze(targets, 0)
-                        loss_main = criterion(outputs, targets)
-                        aux_outputs = torch.cat(aux_outputs, axis=1)
+
                         if single_input:
-                            aux_outputs = aux_outputs[:1]
+                            aux_outputs = [aux_outputs[0][:1], aux_outputs[1][:1]]
+                        aux_outputs = torch.cat(aux_outputs, axis=1)
+
+                        # Calculate losses
+                        loss_main = criterion(outputs, targets)
                         loss_aux = criterion(aux_outputs, targets)
                         loss = loss_main + 0.4 * loss_aux
                         loss.backward()
                         optimizer.step()
                     else:
+                        # Calculate predictions
                         outputs = model(inputs.float())
+                        if single_input:
+                            outputs = [outputs[0][:1], outputs[1][:1]]
                         outputs = torch.cat(outputs, axis=1)
-                        targets = torch.squeeze(torch.cat([mass, calories], axis=1))
+
+                        # Calculate loss
                         loss = criterion(outputs, targets)
                     preds = outputs
 

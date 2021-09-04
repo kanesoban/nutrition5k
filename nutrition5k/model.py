@@ -116,17 +116,3 @@ class Nutrition5kModel(nn.Module):
             return InceptionOutputs(x, aux)
         else:
             return self.base_model.eager_outputs(x, aux)
-
-
-def create_model(device, train=True):
-    model = Nutrition5kModel()
-    model = model.to(device)
-    if train:
-        model.train()
-        params_to_update = model.parameters()
-        optimizer_ft = optim.SGD(params_to_update, lr=0.001, momentum=0.9)
-        criterion = nn.MSELoss()
-    else:
-        model.eval()
-
-    return model
