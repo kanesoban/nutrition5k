@@ -6,6 +6,9 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms
+
+torch.set_printoptions(linewidth=120)
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import yaml
 
@@ -37,8 +40,10 @@ if __name__ == '__main__':
     train_set, val_set = torch.utils.data.random_split(transformed_dataset, [train_size, val_size])
     phases = ['train', 'val']
     dataloaders = {
-        'train': DataLoader(train_set, batch_size=config['batch_size'], shuffle=True, num_workers=config['dataset_workers']),
-        'val': DataLoader(val_set, batch_size=config['batch_size'], shuffle=False, num_workers=config['dataset_workers'])
+        'train': DataLoader(train_set, batch_size=config['batch_size'], shuffle=True,
+                            num_workers=config['dataset_workers']),
+        'val': DataLoader(val_set, batch_size=config['batch_size'], shuffle=False,
+                          num_workers=config['dataset_workers'])
     }
 
     # Detect if we have a GPU available
@@ -48,11 +53,14 @@ if __name__ == '__main__':
     if config['start_checkpoint']:
         model.load_state_dict(torch.load(config['start_checkpoint']))
 
-    optimizer = torch.optim.SGD(model.parameters(), lr=config['learning_rate'])
+    optimizer = torch.optim.RMSprop(model.parameters(), lr=config['learning_rate'])
     criterion = torch.nn.L1Loss()
+    comment = f' batch_size = {config["batch_size"]} lr = {config["learning_rate"]}'
+    tensorboard = SummaryWriter(comment=comment)
 
     since = time.time()
     best_val_loss = np.inf
+    best_training_loss = np.inf
     for epoch in tqdm(range(config['epochs'])):
         training_loss = None
         val_loss = None
@@ -121,12 +129,32 @@ if __name__ == '__main__':
             epoch_loss = running_loss / len(dataloaders[phase].dataset)
             if phase == 'train':
                 training_loss = epoch_loss
+                '''
+                for name, weight in model.named_parameters():
+                    tensorboard.add_histogram(name, weight, epoch)
+                    tensorboard.add_histogram(f'{name}.grad', weight.grad, epoch)
+                '''
             else:
                 val_loss = epoch_loss
 
             print('{} loss: {:.4f}'.format(phase, epoch_loss))
+
+        tensorboard.add_scalar("Training loss", training_loss, epoch)
+        tensorboard.add_scalar("Validation loss", val_loss, epoch)
+
         if (val_loss < best_val_loss) or (not config['save_best_model_only']):
             torch.save(model.state_dict(), os.path.join(config['model_save_path'], 'epoch_{}.pt'.format(epoch)))
+            best_val_loss = val_loss
+        if (training_loss < best_val_loss) or (not config['save_best_model_only']):
+            best_training_loss = training_loss
 
+    tensorboard.add_hparams(
+        {'learning rate': config['learning_rate'], 'batch size': config['batch_size']},
+        {
+            'best training loss': best_training_loss,
+            'best validation loss': best_val_loss
+        },
+    )
+    tensorboard.close()
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))

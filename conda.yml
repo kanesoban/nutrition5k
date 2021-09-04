@@ -9,6 +9,7 @@ dependencies:
   - jupyterlab
   - tqdm
   - scikit-image
+  - tensorboard
   - pandas
   - pip:
       - ffmpeg
