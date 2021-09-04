@@ -5,14 +5,8 @@ from PIL import Image
 from numpy import asarray
 import pandas as pd
 import torch
-import torch.nn as nn
-from skimage import io, transform
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms
-import torch.nn.functional as F
-from tqdm import tqdm
-
-import cv2
+from skimage import transform
+from torch.utils.data import Dataset
 
 
 class Rescale:
@@ -42,15 +36,13 @@ class ToTensor:
     """Convert ndarrays in sample to Tensors."""
 
     def __call__(self, sample):
-        image, calories = sample['image'], sample['calories']
-
         # swap color axis because
         # numpy image: H x W x C
         # torch image: C X H X W
-        image = image.transpose((2, 0, 1))
+        image = sample['image'].transpose((2, 0, 1))
         return {'image': torch.from_numpy(image),
-                'mass': sample['mass'],
-                'calories': torch.from_numpy(calories)}
+                'mass': torch.from_numpy(sample['mass']),
+                'calories': torch.from_numpy(sample['calories'])}
 
 
 class Nutrition5kDataset(Dataset):

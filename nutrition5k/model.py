@@ -2,7 +2,6 @@ import warnings
 
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torchvision
 from torchvision.models.inception import InceptionOutputs, InceptionAux
 
@@ -24,11 +23,6 @@ class Nutrition5kModel(nn.Module):
         self.aux_task_logits = {}
         for task in self.tasks:
             self.aux_task_logits[task] = InceptionAux(768, 1)
-
-        '''
-        self.base_model.fc = nn.Linear(num_ftrs, num_classes)
-        input_size = 299
-        '''
 
     def _forward_inception(self, x):
         # N x 3 x 299 x 299

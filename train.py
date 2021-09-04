@@ -1,6 +1,8 @@
 import argparse
 import time
+import os
 
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms
@@ -42,12 +44,18 @@ if __name__ == '__main__':
     # Detect if we have a GPU available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = Nutrition5kModel().to(device)
+    # Start training from a checkpoint
+    if config['start_checkpoint']:
+        model.load_state_dict(torch.load(config['start_checkpoint']))
 
     optimizer = torch.optim.SGD(model.parameters(), lr=config['learning_rate'])
     criterion = torch.nn.L1Loss()
 
     since = time.time()
+    best_val_loss = np.inf
     for epoch in tqdm(range(config['epochs'])):
+        training_loss = None
+        val_loss = None
         for phase in phases:
             if phase == 'train':
                 model.train()
@@ -111,9 +119,14 @@ if __name__ == '__main__':
                 running_loss += loss.item() * inputs.size(0)
 
             epoch_loss = running_loss / len(dataloaders[phase].dataset)
+            if phase == 'train':
+                training_loss = epoch_loss
+            else:
+                val_loss = epoch_loss
 
-            print('{} Loss: {:.4f}'.format(phase, epoch_loss))
-
+            print('{} loss: {:.4f}'.format(phase, epoch_loss))
+        if (val_loss < best_val_loss) or (not config['save_best_model_only']):
+            torch.save(model.state_dict(), os.path.join(config['model_save_path'], 'epoch_{}.pt'.format(epoch)))
 
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
