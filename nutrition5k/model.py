@@ -101,10 +101,10 @@ class Nutrition5kModel(nn.Module):
             for task in self.tasks:
                 aux_outputs.append(self.aux_task_logits[task](aux))
         else:
-            for task in self.tasks:
+            for _ in self.tasks:
                 aux_outputs.append(None)
 
-        return outputs, aux
+        return outputs, aux_outputs
 
     def forward(self, x):
         x = self.base_model._transform_input(x)

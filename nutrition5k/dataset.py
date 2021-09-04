@@ -35,7 +35,7 @@ class Rescale:
         new_h, new_w = int(new_h), int(new_w)
         img = transform.resize(image, (new_h, new_w))
 
-        return {'image': img, 'calories': sample['calories']}
+        return {'image': img, 'mass': sample['mass'], 'calories': sample['calories']}
 
 
 class ToTensor:
@@ -49,6 +49,7 @@ class ToTensor:
         # torch image: C X H X W
         image = image.transpose((2, 0, 1))
         return {'image': torch.from_numpy(image),
+                'mass': sample['mass'],
                 'calories': torch.from_numpy(calories)}
 
 
@@ -76,16 +77,20 @@ class Nutrition5kDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        frames_path = os.path.join(self.root_dir, 'imagery', 'side_angles', self.dish_calories.iloc[idx]['dish_id'], 'camera_A')
-        frame = os.path.join(frames_path, '0.jpg')
+        frames_path = os.path.join(self.root_dir, 'imagery', 'side_angles', self.dish_calories.iloc[idx]['dish_id'],
+                                   'camera_A')
+        frame = os.path.join(frames_path, '1.jpg')
 
         image = Image.open(frame)
         image = asarray(image)
 
+        mass = self.dish_calories.iloc[idx]['mass']
+        mass = np.array([mass])
+        mass = mass.astype('float').reshape(1, 1)
         calories = self.dish_calories.iloc[idx]['calories']
         calories = np.array([calories])
         calories = calories.astype('float').reshape(1, 1)
-        sample = {'image': image, 'calories': calories}
+        sample = {'image': image, 'mass': mass, 'calories': calories}
 
         if self.transform:
             sample = self.transform(sample)
