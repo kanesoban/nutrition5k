@@ -2,8 +2,12 @@ import argparse
 import time
 import os
 
+TEST_MODE = True
 import numpy as np
 import torch
+if TEST_MODE:
+    np.random.seed(0)
+    torch.manual_seed(0)
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
