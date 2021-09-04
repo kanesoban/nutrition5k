@@ -13,3 +13,4 @@ dependencies:
   - pip:
       - ffmpeg
       - opencv_python
+      - yml

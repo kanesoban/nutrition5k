@@ -1,0 +1,6 @@
+dataset_dir:
+dataset_workers: 4
+split: 0.8
+batch_size: 2
+learning_rate: 0.2
+epochs: 1
