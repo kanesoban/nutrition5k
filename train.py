@@ -19,77 +19,8 @@ import yaml
 
 from nutrition5k.dataset import Rescale, ToTensor, Nutrition5kDataset
 from nutrition5k.model import Nutrition5kModel
-
-
-def parse_args():
-    """ Parse the arguments."""
-    parser = argparse.ArgumentParser(description='')
-    parser.add_argument('--config_path', help='Name of the base config file without extension.', required=True)
-    return parser.parse_args()
-
-
-def train_step(model, inputs, targets, single_input):
-    # Calculate predictions
-    outputs, aux_outputs = model(inputs.float())
-    if single_input:
-        outputs = [outputs[0][:1], outputs[1][:1]]
-    outputs = torch.cat(outputs, axis=1)
-    if single_input:
-        aux_outputs = [aux_outputs[0][:1], aux_outputs[1][:1]]
-    aux_outputs = torch.cat(aux_outputs, axis=1)
-    # Calculate losses
-    loss_main = criterion(outputs, targets)
-    loss_aux = criterion(aux_outputs, targets)
-    loss = loss_main + 0.4 * loss_aux
-    loss.backward()
-    optimizer.step()
-    return loss
-
-
-def eval_step(model, inputs, targets, single_input):
-    # Calculate predictions
-    outputs = model(inputs.float())
-    if single_input:
-        outputs = [outputs[0][:1], outputs[1][:1]]
-    outputs = torch.cat(outputs, axis=1)
-    # Calculate loss
-    loss = criterion(outputs, targets)
-    return loss
-
-
-def run_epoch(model, dataloader):
-    running_loss = 0.0
-    # Iterate over data.
-    for batch in dataloader:
-        inputs = batch['image'].to(device)
-        mass = batch['mass'].to(device)
-        calories = batch['calories'].to(device)
-
-        single_input = inputs.shape[0] == 1
-        # Training will not work with bs == 1, so we do a 'hack'
-        if single_input:
-            dummy_tensor = torch.zeros(batch['image'][:1].shape)
-            inputs = torch.cat([batch['image'][:1], dummy_tensor], axis=0)
-
-        # zero the parameter gradients
-        optimizer.zero_grad()
-
-        # forward
-        # track history if only in train
-        with torch.set_grad_enabled(phase == 'train'):
-            # Calculate actual targets
-            targets = torch.squeeze(torch.cat([mass, calories], axis=1))
-            if len(targets.shape) == 1:
-                targets = torch.unsqueeze(targets, 0)
-
-            if phase == 'train':
-                loss = train_step(model, inputs, targets, single_input)
-            else:
-                loss = eval_step(model, inputs, targets, single_input)
-
-        # statistics
-        running_loss += loss.item() * inputs.size(0)
-    return running_loss / len(dataloaders[phase].dataset)
+from nutrition5k.train_utils import run_epoch
+from nutrition5k.utils import parse_args
 
 
 if __name__ == '__main__':
@@ -118,6 +49,8 @@ if __name__ == '__main__':
                            num_workers=config['dataset_workers'])
     }
 
+    torch.save(dataloaders['test'], 'test_loader.pt')
+
     # Detect if we have a GPU available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = Nutrition5kModel().to(device)
@@ -142,7 +75,7 @@ if __name__ == '__main__':
                 model.train()
             else:
                 model.eval()
-            epoch_loss = run_epoch(model, dataloaders[phase])
+            epoch_loss = run_epoch(model, criterion, dataloaders[phase], device, phase, optimizer=optimizer)
             if phase == 'train':
                 training_loss = epoch_loss
                 '''
