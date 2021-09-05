@@ -29,7 +29,7 @@ if __name__ == '__main__':
 
     since = time.time()
     model.eval()
-    results = run_epoch(model, criterion, dataloader, device, 'test', config['prediction_threshold'])
+    results = run_epoch(model, criterion, dataloader, device, 'test', False, config['prediction_threshold'])
     time_elapsed = time.time() - since
     print('{} loss: {:.4f}'.format('Test', results['average loss']))
     print('{} mass prediction accuracy: {:.4f}'.format('Test', results['mass prediction accuracy']))

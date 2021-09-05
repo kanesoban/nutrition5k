@@ -1,15 +1,28 @@
 import time
 import os
 
-TEST_MODE = True
+'''
+DEBUG_MODE == True is intended for testing code, while 
+DEBUG_MODE == False is intended to enable faster training and inference
+'''
+DEBUG_MODE = True
 import numpy as np
 import torch
 
-if TEST_MODE:
+if DEBUG_MODE:
     np.random.seed(0)
     torch.manual_seed(0)
+    torch.autograd.set_detect_anomaly(True)
+    torch.autograd.profiler.profile(True)
+    torch.backends.cudnn.benchmark = False
+else:
+    torch.autograd.set_detect_anomaly(False)
+    torch.autograd.profiler.profile(False)
+    torch.backends.cudnn.benchmark = True
+
 from torch.utils.data import DataLoader
 from torchvision import transforms
+from torch.cuda.amp import GradScaler
 
 torch.set_printoptions(linewidth=120)
 from torch.utils.tensorboard import SummaryWriter
@@ -40,11 +53,11 @@ if __name__ == '__main__':
     epoch_phases = ['train', 'val']
     dataloaders = {
         'train': DataLoader(train_set, batch_size=config['batch_size'], shuffle=True,
-                            num_workers=config['dataset_workers']),
+                            num_workers=config['dataset_workers'], pin_memory=True),
         'val': DataLoader(val_set, batch_size=config['batch_size'], shuffle=False,
-                          num_workers=config['dataset_workers']),
+                          num_workers=config['dataset_workers'], pin_memory=True),
         'test': DataLoader(val_set, batch_size=config['batch_size'], shuffle=False,
-                           num_workers=config['dataset_workers'])
+                           num_workers=config['dataset_workers'], pin_memory=True)
     }
 
     # Detect if we have a GPU available
@@ -63,18 +76,26 @@ if __name__ == '__main__':
 
     best_model_path = None
 
+    if config['mixed_precision_enabled']:
+        scaler = GradScaler()
+    else:
+        scaler = None
+
     since = time.time()
     best_val_loss = np.inf
     best_training_loss = np.inf
     for epoch in tqdm(range(config['epochs'])):
         training_loss = None
         val_loss = None
+        optimizer.zero_grad()
         for phase in epoch_phases:
             if phase == 'train':
                 model.train()
             else:
                 model.eval()
-            results = run_epoch(model, criterion, dataloaders[phase], device, phase, config['prediction_threshold'], optimizer=optimizer)
+            results = run_epoch(model, criterion, dataloaders[phase], device, phase, config['prediction_threshold'],
+                                config['mixed_precision_enabled'], optimizer=optimizer, scaler=scaler,
+                                gradient_acc_steps=config['gradient_acc_steps'])
             if phase == 'train':
                 training_loss = results['average loss']
                 '''
