@@ -47,8 +47,6 @@ if __name__ == '__main__':
                            num_workers=config['dataset_workers'])
     }
 
-    torch.save(dataloaders['test'], 'test_loader.pt')
-
     # Detect if we have a GPU available
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model = Nutrition5kModel().to(device)
@@ -60,6 +58,9 @@ if __name__ == '__main__':
     criterion = torch.nn.L1Loss()
     comment = f' batch_size = {config["batch_size"]} lr = {config["learning_rate"]}'
     tensorboard = SummaryWriter(comment=comment)
+
+    torch.save(dataloaders['test'], os.path.join(tensorboard.log_dir, 'test_loader.pt'))
+
     best_model_path = None
 
     since = time.time()
@@ -92,9 +93,9 @@ if __name__ == '__main__':
             print('Epoch {} {} loss: {:.4f}'.format(epoch, phase, results['average loss']))
 
         if (val_loss < best_val_loss) or (not config['save_best_model_only']):
-            torch.save(model.state_dict(), os.path.join(config['model_save_path'], 'epoch_{}.pt'.format(epoch)))
+            torch.save(model.state_dict(), os.path.join(tensorboard.log_dir, 'epoch_{}.pt'.format(epoch)))
             best_val_loss = val_loss
-        if (training_loss < best_val_loss) or (not config['save_best_model_only']):
+        if training_loss < best_val_loss:
             best_training_loss = training_loss
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))

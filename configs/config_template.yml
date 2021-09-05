@@ -8,7 +8,6 @@ batch_size: 2
 learning_rate: 0.2
 epochs: 1
 save_best_model_only: True
-model_save_path:
 start_checkpoint:
 test_checkpoint:
 prediction_threshold: 0.1
