@@ -1,4 +1,3 @@
-import argparse
 import time
 import os
 
@@ -21,7 +20,6 @@ from nutrition5k.dataset import Rescale, ToTensor, Nutrition5kDataset
 from nutrition5k.model import Nutrition5kModel
 from nutrition5k.train_utils import run_epoch
 from nutrition5k.utils import parse_args
-
 
 if __name__ == '__main__':
     # parse arguments
@@ -52,7 +50,7 @@ if __name__ == '__main__':
     torch.save(dataloaders['test'], 'test_loader.pt')
 
     # Detect if we have a GPU available
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model = Nutrition5kModel().to(device)
     # Start training from a checkpoint
     if config['start_checkpoint']:
@@ -75,21 +73,23 @@ if __name__ == '__main__':
                 model.train()
             else:
                 model.eval()
-            epoch_loss = run_epoch(model, criterion, dataloaders[phase], device, phase, optimizer=optimizer)
+            results = run_epoch(model, criterion, dataloaders[phase], device, phase, config['prediction_threshold'], optimizer=optimizer)
             if phase == 'train':
-                training_loss = epoch_loss
+                training_loss = results['average loss']
                 '''
                 for name, weight in model.named_parameters():
                     tensorboard.add_histogram(name, weight, epoch)
                     tensorboard.add_histogram(f'{name}.grad', weight.grad, epoch)
                 '''
             else:
-                val_loss = epoch_loss
+                val_loss = results['average loss']
 
-            print('{} loss: {:.4f}'.format(phase, epoch_loss))
-
-        tensorboard.add_scalar("Training loss", training_loss, epoch)
-        tensorboard.add_scalar("Validation loss", val_loss, epoch)
+            tensorboard.add_scalar('{} loss'.format(phase), results['average loss'], epoch)
+            tensorboard.add_scalar('{} mass prediction accuracy'.format(phase), results['mass prediction accuracy'],
+                                   epoch)
+            tensorboard.add_scalar('{} calorie prediction accuracy'.format(phase),
+                                   results['calorie prediction accuracy'], epoch)
+            print('Epoch {} {} loss: {:.4f}'.format(epoch, phase, results['average loss']))
 
         if (val_loss < best_val_loss) or (not config['save_best_model_only']):
             torch.save(model.state_dict(), os.path.join(config['model_save_path'], 'epoch_{}.pt'.format(epoch)))

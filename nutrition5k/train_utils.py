@@ -1,9 +1,16 @@
+import numpy as np
 import torch
 
 torch.set_printoptions(linewidth=120)
 
 
-def train_step(model, optimizer, criterion, inputs, targets, single_input):
+def calculate_correct_predictions(outputs, targets, prediction_threshold):
+    outputs_numpy = outputs.detach().numpy()
+    targets_numpy = targets.detach().numpy()
+    return (np.absolute(outputs_numpy - targets_numpy) / targets_numpy) < prediction_threshold
+
+
+def train_step(model, optimizer, criterion, inputs, targets, single_input, prediction_threshold):
     # Calculate predictions
     outputs, aux_outputs = model(inputs.float())
     if single_input:
@@ -18,10 +25,13 @@ def train_step(model, optimizer, criterion, inputs, targets, single_input):
     loss = loss_main + 0.4 * loss_aux
     loss.backward()
     optimizer.step()
-    return loss
+
+    # Calculate 'correct' predictions
+    correct_predictions = calculate_correct_predictions(outputs, targets, prediction_threshold)
+    return correct_predictions, loss
 
 
-def eval_step(model, criterion, inputs, targets, single_input):
+def eval_step(model, criterion, inputs, targets, single_input, prediction_threshold):
     # Calculate predictions
     outputs = model(inputs.float())
     if single_input:
@@ -29,12 +39,17 @@ def eval_step(model, criterion, inputs, targets, single_input):
     outputs = torch.cat(outputs, axis=1)
     # Calculate loss
     loss = criterion(outputs, targets)
-    return loss
+
+    # Calculate 'correct' predictions
+    correct_predictions = calculate_correct_predictions(outputs, targets, prediction_threshold)
+    return correct_predictions, loss
 
 
-def run_epoch(model, criterion, dataloader, device, phase, optimizer=None):
+def run_epoch(model, criterion, dataloader, device, phase, prediction_threshold, optimizer=None):
     running_loss = 0.0
     # Iterate over data.
+    mass_correct_predictions = 0
+    calories_correct_predictions = 0
     for batch in dataloader:
         inputs = batch['image'].to(device)
         mass = batch['mass'].to(device)
@@ -59,10 +74,17 @@ def run_epoch(model, criterion, dataloader, device, phase, optimizer=None):
                 targets = torch.unsqueeze(targets, 0)
 
             if phase == 'train':
-                loss = train_step(model, optimizer, criterion, inputs, targets, single_input)
+                correct_predictions, loss = train_step(model, optimizer, criterion, inputs, targets, single_input, prediction_threshold)
             else:
-                loss = eval_step(model, criterion, inputs, targets, single_input)
+                correct_predictions, loss = eval_step(model, criterion, inputs, targets, single_input, prediction_threshold)
+            mass_correct_predictions += np.sum(correct_predictions[:, 0])
+            calories_correct_predictions += np.sum(correct_predictions[:, 1])
 
         # statistics
         running_loss += loss.item() * inputs.size(0)
-    return running_loss / len(dataloader.dataset)
+
+    return {
+        'average loss': running_loss / len(dataloader.dataset),
+        'mass prediction accuracy': mass_correct_predictions / len(dataloader.dataset),
+        'calorie prediction accuracy': calories_correct_predictions / len(dataloader.dataset)
+    }
