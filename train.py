@@ -1,5 +1,8 @@
 import time
+import logging
 import os
+from glob import glob
+from shutil import copyfile
 
 '''
 DEBUG_MODE == True is intended for testing code, while 
@@ -8,6 +11,13 @@ DEBUG_MODE == False is intended to enable faster training and inference
 DEBUG_MODE = True
 import numpy as np
 import torch
+CUDA_VERSION = torch.version.cuda
+logging.warning('cuda version: {}'.format(CUDA_VERSION))
+'''
+if CUDA_VERSION:
+    logging.warning('CUDA_PATH: {}'.format(os.environ['CUDA_PATH']))
+    logging.warning('CUDA_HOME: {}'.format(os.environ['CUDA_HOME']))
+'''
 
 if DEBUG_MODE:
     np.random.seed(0)
@@ -29,29 +39,23 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import yaml
 
-from nutrition5k.dataset import Rescale, ToTensor, Nutrition5kDataset
+from nutrition5k.dataset import Resize, ToTensor, Normalize, Nutrition5kDataset
 from nutrition5k.model import Nutrition5kModel
 from nutrition5k.train_utils import run_epoch
 from nutrition5k.utils import parse_args
 
-if __name__ == '__main__':
-    # parse arguments
-    args = parse_args()
 
-    with open(args.config_path, 'r') as ymlfile:
-        config = yaml.safe_load(ymlfile)
-
+def create_dataloaders():
     transformed_dataset = Nutrition5kDataset(config['dataset_dir'], transform=transforms.Compose(
-        [Rescale((299, 299)), ToTensor()]))
-
+        [Resize((299, 299)),
+         ToTensor(),
+         Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]))
     n_videos = len(transformed_dataset)
     train_size = int(config['split']['train'] * n_videos)
     val_size = int(config['split']['validation'] * n_videos)
     test_size = n_videos - train_size - val_size
-
     train_set, val_set, test_set = torch.utils.data.random_split(transformed_dataset, [train_size, val_size, test_size])
-    epoch_phases = ['train', 'val']
-    dataloaders = {
+    return {
         'train': DataLoader(train_set, batch_size=config['batch_size'], shuffle=True,
                             num_workers=config['dataset_workers'], pin_memory=True),
         'val': DataLoader(val_set, batch_size=config['batch_size'], shuffle=False,
@@ -60,26 +64,52 @@ if __name__ == '__main__':
                            num_workers=config['dataset_workers'], pin_memory=True)
     }
 
+
+if __name__ == '__main__':
+    # parse arguments
+    args = parse_args()
+
+    with open(args.config_path, 'r') as ymlfile:
+        config = yaml.safe_load(ymlfile)
+
+    comment = f' batch_size = {config["batch_size"]} lr = {config["learning_rate"]}'
+    tensorboard = SummaryWriter(comment=comment)
+
+    copyfile(args.config_path, os.path.join(tensorboard.log_dir, os.path.basename(args.config_path)))
+
+    if config['start_checkpoint']:
+        dataloaders = torch.load(os.path.join(config['start_checkpoint'], 'dataloaders.pt'))
+    else:
+        dataloaders = create_dataloaders()
+        torch.save(dataloaders, os.path.join(tensorboard.log_dir, 'dataloaders.pt'))
+
+    epoch_phases = ['train', 'val']
+
     # Detect if we have a GPU available
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model = Nutrition5kModel().to(device)
     # Start training from a checkpoint
     if config['start_checkpoint']:
-        model.load_state_dict(torch.load(config['start_checkpoint']))
+        previous_epochs = glob(os.path.join(config['start_checkpoint'], 'epochs/*'))
+        # Sort epochs
+        previous_epochs = sorted(previous_epochs, key=lambda x: int(x))
+        best_epoch = previous_epochs[-1]
+        model.load_state_dict(torch.load(os.path.join(best_epoch, 'model.pt')))
+        optimizer = torch.load(os.path.join(best_epoch, 'optimizer.pt'))
+        if config['mixed_precision_enabled']:
+            scaler = torch.load(os.path.join(best_epoch, 'scaler.pt'))
+        else:
+            scaler = None
+    else:
+        optimizer = torch.optim.RMSprop(model.parameters(), lr=config['learning_rate'])
+        if config['mixed_precision_enabled']:
+            scaler = GradScaler()
+        else:
+            scaler = None
 
-    optimizer = torch.optim.RMSprop(model.parameters(), lr=config['learning_rate'])
     criterion = torch.nn.L1Loss()
-    comment = f' batch_size = {config["batch_size"]} lr = {config["learning_rate"]}'
-    tensorboard = SummaryWriter(comment=comment)
-
-    torch.save(dataloaders['test'], os.path.join(tensorboard.log_dir, 'test_loader.pt'))
 
     best_model_path = None
-
-    if config['mixed_precision_enabled']:
-        scaler = GradScaler()
-    else:
-        scaler = None
 
     since = time.time()
     best_val_loss = np.inf
@@ -87,7 +117,7 @@ if __name__ == '__main__':
     for epoch in tqdm(range(config['epochs'])):
         training_loss = None
         val_loss = None
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
         for phase in epoch_phases:
             if phase == 'train':
                 model.train()
@@ -112,9 +142,17 @@ if __name__ == '__main__':
             tensorboard.add_scalar('{} calorie prediction accuracy'.format(phase),
                                    results['calorie prediction accuracy'], epoch)
             print('Epoch {} {} loss: {:.4f}'.format(epoch, phase, results['average loss']))
+            print('Epoch {} {} accuracy: {:.4f}'.format(epoch, phase, results['mass prediction accuracy']))
+            print('Epoch {} {} accuracy: {:.4f}'.format(epoch, phase, results['calorie prediction accuracy']))
 
         if (val_loss < best_val_loss) or (not config['save_best_model_only']):
-            torch.save(model.state_dict(), os.path.join(tensorboard.log_dir, 'epoch_{}.pt'.format(epoch)))
+            epoch_dir = os.path.join(tensorboard.log_dir, 'epoch_{}'.format(epoch))
+            os.makedirs(epoch_dir, exist_ok=True)
+            torch.save(model.state_dict(), os.path.join(epoch_dir, 'model.pt'))
+            torch.save(optimizer, os.path.join(epoch_dir, 'optimizer.pt'))
+            if scaler:
+                torch.save(scaler, os.path.join(epoch_dir, 'scaler.pt'))
+
             best_val_loss = val_loss
         if training_loss < best_val_loss:
             best_training_loss = training_loss

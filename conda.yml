@@ -1,4 +1,9 @@
 name: nutrition5k
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
 dependencies:
   - python=3.8
   - pip
@@ -8,6 +13,7 @@ dependencies:
   - pytorch
   - jupyterlab
   - tqdm
+  - cudatoolkit=11.1
   - scikit-image
   - tensorboard
   - pandas

@@ -67,19 +67,15 @@ def run_epoch(model, criterion, dataloader, device, phase, prediction_threshold,
     mass_correct_predictions = 0
     calories_correct_predictions = 0
     for batch_idx, batch in enumerate(dataloader):
-        inputs = batch['image'].to(device)
-        mass = batch['mass'].to(device)
-        calories = batch['calories'].to(device)
+        inputs = batch['image']
+        mass = batch['mass']
+        calories = batch['calories']
 
         single_input = inputs.shape[0] == 1
         # Training will not work with bs == 1, so we do a 'hack'
         if single_input:
             dummy_tensor = torch.zeros(batch['image'][:1].shape)
             inputs = torch.cat([batch['image'][:1], dummy_tensor], axis=0)
-
-        # zero the parameter gradients
-        if phase == 'train':
-            optimizer.zero_grad(set_to_none=True)
 
         # track history if only in train
         with torch.set_grad_enabled(phase == 'train'):
@@ -88,6 +84,8 @@ def run_epoch(model, criterion, dataloader, device, phase, prediction_threshold,
             if len(targets.shape) == 1:
                 targets = torch.unsqueeze(targets, 0)
 
+            inputs = inputs.to(device)
+            targets = targets.to(device)
             if phase == 'train':
                 correct_predictions, loss = train_step(model, optimizer, criterion, inputs, targets, single_input,
                                                        prediction_threshold, mixed_precision_enabled, scaler=scaler,

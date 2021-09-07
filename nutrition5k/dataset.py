@@ -7,10 +7,11 @@ import pandas as pd
 import torch
 from skimage import transform
 from torch.utils.data import Dataset
+import torchvision.transforms.functional as functional
 
 
-class Rescale:
-    """Rescale the image in a sample to a given size.
+class Resize:
+    """Resize the image in a sample to a given size.
 
     Args:
         output_size (tuple or int): Desired output size. If tuple, output is
@@ -43,6 +44,17 @@ class ToTensor:
         return {'image': torch.from_numpy(image),
                 'mass': torch.from_numpy(sample['mass']),
                 'calories': torch.from_numpy(sample['calories'])}
+
+
+class Normalize:
+    """Normalize image values."""
+    def __init__(self, means, stds):
+        self.means = means
+        self.stds = stds
+
+    def __call__(self, sample):
+        sample['image'] = functional.normalize(sample['image'], self.means, self.stds)
+        return sample
 
 
 class Nutrition5kDataset(Dataset):
