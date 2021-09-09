@@ -14,3 +14,5 @@ prediction_threshold: 0.1
 mixed_precision_enabled: False
 gradient_acc_steps: 1
 max_training_time: 8
+log_dir: 'runs'
+experiment_name: 'baseline'

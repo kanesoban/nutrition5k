@@ -76,7 +76,7 @@ if __name__ == '__main__':
         config = yaml.safe_load(ymlfile)
 
     comment = f' batch_size = {config["batch_size"]} lr = {config["learning_rate"]}'
-    tensorboard = SummaryWriter(comment=comment)
+    tensorboard = SummaryWriter(comment=comment, log_dir=os.path.join(config['log_dir'], config['experiment_name']))
 
     copyfile(args.config_path, os.path.join(tensorboard.log_dir, os.path.basename(args.config_path)))
 
