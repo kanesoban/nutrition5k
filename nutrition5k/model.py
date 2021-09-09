@@ -24,6 +24,29 @@ class Nutrition5kModel(nn.Module):
         for task in self.tasks:
             self.aux_task_logits[task] = InceptionAux(768, 1)
 
+    def float(self):
+        super().float()
+        for task in self.tasks:
+            for layer in self.task_layers[task]:
+                for param in layer.parameters():
+                    param.float()
+
+        for task in self.tasks:
+            for param in self.aux_task_logits[task].parameters():
+                param.float()
+        return self
+
+    def to(self, *args, **kwargs):
+        super().to(*args, **kwargs)
+        # We need to manually send some layers to the appropriate device
+        for task in self.tasks:
+            for layer in self.task_layers[task]:
+                layer.to(*args, **kwargs)
+
+        for task in self.tasks:
+            self.aux_task_logits[task].to(*args, **kwargs)
+        return self
+
     def _forward_inception(self, x):
         # N x 3 x 299 x 299
         x = self.base_model.Conv2d_1a_3x3(x)

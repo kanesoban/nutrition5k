@@ -5,8 +5,8 @@ torch.set_printoptions(linewidth=120)
 
 
 def calculate_correct_predictions(outputs, targets, prediction_threshold):
-    outputs_numpy = outputs.detach().numpy()
-    targets_numpy = targets.detach().numpy()
+    outputs_numpy = outputs.cpu().detach().numpy()
+    targets_numpy = targets.cpu().detach().numpy()
     return (np.absolute(outputs_numpy - targets_numpy) / targets_numpy) < prediction_threshold
 
 
@@ -56,6 +56,7 @@ def eval_step(model, criterion, inputs, targets, single_input, prediction_thresh
     loss = criterion(outputs, targets)
 
     # Calculate 'correct' predictions
+    # TODO check if you should only calculate this for validation/test
     correct_predictions = calculate_correct_predictions(outputs, targets, prediction_threshold)
     return correct_predictions, loss
 
@@ -84,8 +85,8 @@ def run_epoch(model, criterion, dataloader, device, phase, prediction_threshold,
             if len(targets.shape) == 1:
                 targets = torch.unsqueeze(targets, 0)
 
-            inputs = inputs.to(device)
-            targets = targets.to(device)
+            inputs = inputs.float().to(device)
+            targets = targets.float().to(device)
             if phase == 'train':
                 correct_predictions, loss = train_step(model, optimizer, criterion, inputs, targets, single_input,
                                                        prediction_threshold, mixed_precision_enabled, scaler=scaler,

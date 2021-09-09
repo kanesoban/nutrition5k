@@ -87,7 +87,7 @@ if __name__ == '__main__':
 
     # Detect if we have a GPU available
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    model = Nutrition5kModel().to(device)
+    model = Nutrition5kModel().float().to(device)
     # Start training from a checkpoint
     if config['start_checkpoint']:
         previous_epochs = glob(os.path.join(config['start_checkpoint'], 'epochs/*'))
