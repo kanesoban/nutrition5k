@@ -11,5 +11,6 @@ save_best_model_only: True
 start_checkpoint:
 test_checkpoint:
 prediction_threshold: 0.1
-mixed_precision_enabled: True
+mixed_precision_enabled: False
 gradient_acc_steps: 1
+max_training_time: 8

@@ -45,6 +45,9 @@ from nutrition5k.train_utils import run_epoch
 from nutrition5k.utils import parse_args
 
 
+SECONDS_TO_HOURS = 3600
+
+
 def create_dataloaders():
     transformed_dataset = Nutrition5kDataset(config['dataset_dir'], transform=transforms.Compose(
         [Resize((299, 299)),
@@ -156,6 +159,11 @@ if __name__ == '__main__':
             best_val_loss = val_loss
         if training_loss < best_val_loss:
             best_training_loss = training_loss
+
+        time_elapsed = time.time() - since
+        if config['max_training_time'] and (time_elapsed // SECONDS_TO_HOURS) > config['max_training_time']:
+            print('Time limit exceeded. Stopping training. ')
+            break
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
 
