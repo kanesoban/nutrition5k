@@ -48,7 +48,7 @@ class ToTensor:
 
 class Normalize:
     """Normalize image values."""
-    def __init__(self, image_means, image_stds, mass_max=250, calories_max=200):
+    def __init__(self, image_means, image_stds, mass_max=1.0, calories_max=1.0):
         self.means = image_means
         self.stds = image_stds
         self.mass_max = mass_max
