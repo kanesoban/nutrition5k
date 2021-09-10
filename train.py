@@ -11,6 +11,7 @@ DEBUG_MODE == False is intended to enable faster training and inference
 DEBUG_MODE = True
 import numpy as np
 import torch
+
 CUDA_VERSION = torch.version.cuda
 logging.warning('cuda version: {}'.format(CUDA_VERSION))
 '''
@@ -33,6 +34,7 @@ else:
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from torch.cuda.amp import GradScaler
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 torch.set_printoptions(linewidth=120)
 from torch.utils.tensorboard import SummaryWriter
@@ -43,7 +45,6 @@ from nutrition5k.dataset import Resize, ToTensor, Normalize, Nutrition5kDataset
 from nutrition5k.model import Nutrition5kModel
 from nutrition5k.train_utils import run_epoch
 from nutrition5k.utils import parse_args
-
 
 SECONDS_TO_HOURS = 3600
 
@@ -86,7 +87,9 @@ if __name__ == '__main__':
         dataloaders = create_dataloaders()
         torch.save(dataloaders, os.path.join(tensorboard.log_dir, 'dataloaders.pt'))
 
-    epoch_phases = ['train', 'val']
+    epoch_phases = ['train']
+    if len(dataloaders['val']) > 0:
+        epoch_phases.append('val')
 
     # Detect if we have a GPU available
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -112,6 +115,8 @@ if __name__ == '__main__':
 
     criterion = torch.nn.L1Loss()
 
+    lr_scheduler = ReduceLROnPlateau(optimizer, patience=config['lr_scheduler']['patience'])
+
     best_model_path = None
 
     since = time.time()
@@ -128,7 +133,9 @@ if __name__ == '__main__':
                 model.eval()
             results = run_epoch(model, criterion, dataloaders[phase], device, phase, config['prediction_threshold'],
                                 config['mixed_precision_enabled'], optimizer=optimizer, scaler=scaler,
-                                gradient_acc_steps=config['gradient_acc_steps'])
+                                lr_scheduler=lr_scheduler,
+                                gradient_acc_steps=config['gradient_acc_steps'],
+                                lr_scheduler_metric=config['lr_scheduler']['metric'])
             if phase == 'train':
                 training_loss = results['average loss']
                 '''
@@ -145,10 +152,12 @@ if __name__ == '__main__':
             tensorboard.add_scalar('{} calorie prediction accuracy'.format(phase),
                                    results['calorie prediction accuracy'], epoch)
             print('Epoch {} {} loss: {:.4f}'.format(epoch, phase, results['average loss']))
-            print('Epoch {} {} accuracy: {:.4f}'.format(epoch, phase, results['mass prediction accuracy']))
-            print('Epoch {} {} accuracy: {:.4f}'.format(epoch, phase, results['calorie prediction accuracy']))
+            print('Epoch {} {} mass prediction accuracy: {:.4f}'.format(epoch, phase,
+                                                                        results['mass prediction accuracy']))
+            print('Epoch {} {} calorie prediction accuracy: {:.4f}'.format(epoch, phase,
+                                                                           results['calorie prediction accuracy']))
 
-        if (val_loss < best_val_loss) or (not config['save_best_model_only']):
+        if val_loss and (val_loss < best_val_loss) or (not config['save_best_model_only']):
             epoch_dir = os.path.join(tensorboard.log_dir, 'epoch_{}'.format(epoch))
             os.makedirs(epoch_dir, exist_ok=True)
             torch.save(model.state_dict(), os.path.join(epoch_dir, 'model.pt'))
@@ -157,7 +166,7 @@ if __name__ == '__main__':
                 torch.save(scaler, os.path.join(epoch_dir, 'scaler.pt'))
 
             best_val_loss = val_loss
-        if training_loss < best_val_loss:
+        if training_loss < best_training_loss:
             best_training_loss = training_loss
 
         time_elapsed = time.time() - since

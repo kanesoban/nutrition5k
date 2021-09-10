@@ -16,3 +16,6 @@ gradient_acc_steps: 1
 max_training_time: 8
 log_dir: 'runs'
 experiment_name: 'baseline'
+lr_scheduler:
+  patience: 2
+  metric: 'val_loss'

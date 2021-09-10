@@ -62,7 +62,7 @@ def eval_step(model, criterion, inputs, targets, single_input, prediction_thresh
 
 
 def run_epoch(model, criterion, dataloader, device, phase, prediction_threshold, mixed_precision_enabled,
-              optimizer=None, scaler=None, gradient_acc_steps=None):
+              optimizer=None, scaler=None, lr_scheduler=None, gradient_acc_steps=None, lr_scheduler_metric='val_loss'):
     running_loss = 0.0
     # Iterate over data.
     mass_correct_predictions = 0
@@ -98,7 +98,10 @@ def run_epoch(model, criterion, dataloader, device, phase, prediction_threshold,
             calories_correct_predictions += np.sum(correct_predictions[:, 1])
 
         # statistics
-        running_loss += loss.item() * inputs.size(0)
+        current_loss = loss.item() * inputs.size(0)
+        running_loss += current_loss
+    if (lr_scheduler_metric == 'val_loss' and phase == 'val') or (lr_scheduler_metric == 'train_loss' and phase == 'train'):
+        lr_scheduler.step(running_loss)
 
     return {
         'average loss': running_loss / len(dataloader.dataset),
