@@ -48,11 +48,15 @@ class ToTensor:
 
 class Normalize:
     """Normalize image values."""
-    def __init__(self, means, stds):
-        self.means = means
-        self.stds = stds
+    def __init__(self, image_means, image_stds, mass_max=250, calories_max=200):
+        self.means = image_means
+        self.stds = image_stds
+        self.mass_max = mass_max
+        self.calories_max = calories_max
 
     def __call__(self, sample):
+        sample['mass'] = sample['mass'] / self.mass_max
+        sample['calories'] = sample['calories'] / self.calories_max
         sample['image'] = functional.normalize(sample['image'], self.means, self.stds)
         return sample
 
