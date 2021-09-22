@@ -1,4 +1,5 @@
 import os
+import random
 
 import numpy as np
 from PIL import Image
@@ -48,6 +49,7 @@ class ToTensor:
 
 class Normalize:
     """Normalize image values."""
+
     def __init__(self, image_means, image_stds, mass_max=1.0, calories_max=1.0):
         self.means = image_means
         self.stds = image_stds
@@ -61,22 +63,49 @@ class Normalize:
         return sample
 
 
+def create_nutrition_df(root_dir):
+    csv_files = [os.path.join(root_dir, 'metadata', 'dish_metadata_cafe1.csv'),
+                 os.path.join(root_dir, 'metadata', 'dish_metadata_cafe2.csv')]
+    dish_metadata = {'dish_id': [], 'mass': [], 'calories': []}
+    for csv_file in csv_files:
+        with open(csv_file, "r") as f:
+            for line in f.readlines():
+                parts = line.split(',')
+
+                # Temporary hack before i can fix the data extraction
+                dish_id = parts[0]
+                frames_path = os.path.join(root_dir, 'imagery', 'side_angles',
+                                           dish_id,
+                                           'camera_A')
+                frame = os.path.join(frames_path, '1.jpg')
+                if not os.path.exists(frame):
+                    continue
+
+                dish_metadata['dish_id'].append(parts[0])
+                dish_metadata['mass'].append(parts[1])
+                dish_metadata['calories'].append(int(float(parts[2])))
+
+    return pd.DataFrame.from_dict(dish_metadata)
+
+
+def split_dataframe(dataframe: pd.DataFrame, split):
+    index = list(dataframe.index.copy())
+    samples = len(index)
+    random.shuffle(index)
+    train_end = int(samples * split['train'])
+    val_end = train_end + int(samples * split['validation'])
+    train_index = index[:train_end]
+    val_index = index[train_end:val_end]
+    test_index = index[val_end:]
+    return dataframe.loc[train_index], dataframe.loc[val_index], dataframe.loc[test_index]
+
+
 class Nutrition5kDataset(Dataset):
-    def __init__(self, root_dir, transform=None):
+    def __init__(self, dish_calories, root_dir, transform=None):
+        self.dish_calories = dish_calories
         self.root_dir = root_dir
         self.transform = transform
-        csv_files = [os.path.join(root_dir, 'metadata', 'dish_metadata_cafe1.csv'),
-                     os.path.join(root_dir, 'metadata', 'dish_metadata_cafe2.csv')]
-        dish_metadata = {'dish_id': [], 'mass': [], 'calories': []}
-        for csv_file in csv_files:
-            with open(csv_file, "r") as f:
-                for line in f.readlines():
-                    parts = line.split(',')
-                    dish_metadata['dish_id'].append(parts[0])
-                    dish_metadata['mass'].append(parts[1])
-                    dish_metadata['calories'].append(int(float(parts[2])))
-
-        self.dish_calories = pd.DataFrame.from_dict(dish_metadata)
+        print('Total frames: '.format(len(self.dish_calories)))
 
     def __len__(self):
         return len(self.dish_calories)

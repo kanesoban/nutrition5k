@@ -41,7 +41,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import yaml
 
-from nutrition5k.dataset import Resize, ToTensor, Normalize, Nutrition5kDataset
+from nutrition5k.dataset import Resize, ToTensor, Normalize, Nutrition5kDataset, create_nutrition_df, split_dataframe
 from nutrition5k.model import Nutrition5kModel
 from nutrition5k.train_utils import run_epoch
 from nutrition5k.utils import parse_args
@@ -50,21 +50,30 @@ SECONDS_TO_HOURS = 3600
 
 
 def create_dataloaders():
-    transformed_dataset = Nutrition5kDataset(config['dataset_dir'], transform=transforms.Compose(
+    nutrition_df = create_nutrition_df(config['dataset_dir'])
+    train_df, val_df, test_df = split_dataframe(nutrition_df, config['split'])
+
+    train_set = Nutrition5kDataset(train_df, config['dataset_dir'], transform=transforms.Compose(
         [Resize((299, 299)),
          ToTensor(),
          Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]))
-    n_videos = len(transformed_dataset)
-    train_size = int(config['split']['train'] * n_videos)
-    val_size = int(config['split']['validation'] * n_videos)
-    test_size = n_videos - train_size - val_size
-    train_set, val_set, test_set = torch.utils.data.random_split(transformed_dataset, [train_size, val_size, test_size])
+
+    val_set = Nutrition5kDataset(train_df, config['dataset_dir'], transform=transforms.Compose(
+        [Resize((299, 299)),
+         ToTensor(),
+         Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]))
+
+    test_set = Nutrition5kDataset(train_df, config['dataset_dir'], transform=transforms.Compose(
+        [Resize((299, 299)),
+         ToTensor(),
+         Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]))
+
     return {
         'train': DataLoader(train_set, batch_size=config['batch_size'], shuffle=True,
                             num_workers=config['dataset_workers'], pin_memory=True),
         'val': DataLoader(val_set, batch_size=config['batch_size'], shuffle=False,
                           num_workers=config['dataset_workers'], pin_memory=True),
-        'test': DataLoader(val_set, batch_size=config['batch_size'], shuffle=False,
+        'test': DataLoader(test_set, batch_size=config['batch_size'], shuffle=False,
                            num_workers=config['dataset_workers'], pin_memory=True)
     }
 

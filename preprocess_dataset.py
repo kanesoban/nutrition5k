@@ -23,9 +23,10 @@ if __name__ == '__main__':
     for directory in tqdm(video_directories):
         for camera_file in camera_files:
             file_path = os.path.join(directory, camera_file)
-            cap = cv2.VideoCapture(file_path)
-
             frame_dir_path = os.path.join(directory, camera_file.split('.')[0])
+            if os.path.isdir(frame_dir_path):
+                continue
+            cap = cv2.VideoCapture(file_path)
             os.makedirs(frame_dir_path, exist_ok=True)
             frame = None
             count = 1
@@ -34,7 +35,8 @@ if __name__ == '__main__':
                 if frame is None:
                     break
                 else:
-                    frame = cv2.flip(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), 0)
+                    #frame = cv2.flip(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), 0)
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     image = Image.fromarray(frame)
                     image.save(os.path.join(frame_dir_path, str(count)) + '.jpg')
                     count += 1
