@@ -8,6 +8,7 @@ import pandas as pd
 import torch
 from skimage import transform
 from torch.utils.data import Dataset
+import torchvision.transforms as transforms
 import torchvision.transforms.functional as functional
 
 
@@ -31,6 +32,38 @@ class Resize:
         new_h, new_w = int(new_h), int(new_w)
         img = transform.resize(image, (new_h, new_w))
 
+        return {'image': img, 'mass': sample['mass'], 'calories': sample['calories']}
+
+
+class CenterCrop:
+    def __init__(self, output_size):
+        self.output_size = output_size
+
+    def __call__(self, sample):
+        image = sample['image']
+        img = functional.center_crop(image, self.output_size)
+        return {'image': img, 'mass': sample['mass'], 'calories': sample['calories']}
+
+
+class RandomHorizontalFlip:
+    def __init__(self, probability=0.5):
+        self.probability = probability
+        self.flip = transforms.RandomHorizontalFlip(p=probability)
+
+    def __call__(self, sample):
+        image = sample['image']
+        img = self.flip(image)
+        return {'image': img, 'mass': sample['mass'], 'calories': sample['calories']}
+
+
+class RandomVerticalFlip:
+    def __init__(self, probability=0.5):
+        self.probability = probability
+        self.flip = transforms.RandomVerticalFlip(p=probability)
+
+    def __call__(self, sample):
+        image = sample['image']
+        img = self.flip(image)
         return {'image': img, 'mass': sample['mass'], 'calories': sample['calories']}
 
 
@@ -105,7 +138,6 @@ class Nutrition5kDataset(Dataset):
         self.dish_calories = dish_calories
         self.root_dir = root_dir
         self.transform = transform
-        print('Total frames: '.format(len(self.dish_calories)))
 
     def __len__(self):
         return len(self.dish_calories)

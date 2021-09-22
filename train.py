@@ -41,7 +41,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import yaml
 
-from nutrition5k.dataset import Resize, ToTensor, Normalize, Nutrition5kDataset, create_nutrition_df, split_dataframe
+from nutrition5k.dataset import Resize, ToTensor, CenterCrop, RandomHorizontalFlip, RandomVerticalFlip, Normalize, Nutrition5kDataset, create_nutrition_df, split_dataframe
 from nutrition5k.model import Nutrition5kModel
 from nutrition5k.train_utils import run_epoch
 from nutrition5k.utils import parse_args
