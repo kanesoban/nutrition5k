@@ -26,13 +26,11 @@ class Resize:
         self.output_size = output_size
 
     def __call__(self, sample):
-        image = sample['image']
-
         new_h, new_w = self.output_size
         new_h, new_w = int(new_h), int(new_w)
-        img = transform.resize(image, (new_h, new_w))
+        sample['image'] = transform.resize(sample['image'], (new_h, new_w), preserve_range=True).astype('uint8')
 
-        return {'image': img, 'mass': sample['mass'], 'calories': sample['calories']}
+        return sample
 
 
 class CenterCrop:
@@ -40,9 +38,8 @@ class CenterCrop:
         self.output_size = output_size
 
     def __call__(self, sample):
-        image = sample['image']
-        img = functional.center_crop(image, self.output_size)
-        return {'image': img, 'mass': sample['mass'], 'calories': sample['calories']}
+        sample['image'] = functional.center_crop(sample['image'], self.output_size)
+        return sample
 
 
 class RandomHorizontalFlip:
@@ -51,9 +48,8 @@ class RandomHorizontalFlip:
         self.flip = transforms.RandomHorizontalFlip(p=probability)
 
     def __call__(self, sample):
-        image = sample['image']
-        img = self.flip(image)
-        return {'image': img, 'mass': sample['mass'], 'calories': sample['calories']}
+        sample['image'] = self.flip(sample['image'])
+        return sample
 
 
 class RandomVerticalFlip:
@@ -62,9 +58,8 @@ class RandomVerticalFlip:
         self.flip = transforms.RandomVerticalFlip(p=probability)
 
     def __call__(self, sample):
-        image = sample['image']
-        img = self.flip(image)
-        return {'image': img, 'mass': sample['mass'], 'calories': sample['calories']}
+        sample['image'] = self.flip(sample['image'])
+        return sample
 
 
 class ToTensor:
@@ -81,7 +76,7 @@ class ToTensor:
 
 
 class Normalize:
-    """Normalize image values."""
+    """Normalize values."""
 
     def __init__(self, image_means, image_stds, mass_max=1.0, calories_max=1.0):
         self.means = image_means
@@ -115,8 +110,8 @@ def create_nutrition_df(root_dir):
                     continue
 
                 dish_metadata['dish_id'].append(parts[0])
-                dish_metadata['mass'].append(parts[1])
-                dish_metadata['calories'].append(int(float(parts[2])))
+                dish_metadata['calories'].append(int(float(parts[1])))
+                dish_metadata['mass'].append(parts[2])
 
     return pd.DataFrame.from_dict(dish_metadata)
 
