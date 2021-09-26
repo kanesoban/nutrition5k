@@ -3,14 +3,35 @@ import warnings
 import torch
 import torch.nn as nn
 import torchvision
+import torch.nn.functional as F
 from torchvision.models.inception import InceptionOutputs, InceptionAux
 
 
+class InceptionAuxNutrition5k(InceptionAux):
+    def forward(self, x):
+        # N x 768 x 17 x 17
+        x = F.avg_pool2d(x, kernel_size=5, stride=3)
+        # N x 768 x 5 x 5
+        x = self.conv0(x)
+        # N x 128 x 5 x 5
+        x = self.conv1(x)
+        # N x 768 x 1 x 1
+        # Adaptive average pooling
+        x = F.adaptive_avg_pool2d(x, (1, 1))
+        # N x 768 x 1 x 1
+        x = torch.flatten(x, 1)
+        # N x 768
+        x = F.relu(self.fc(x))
+        # N x 1000
+        return x
+
+
 class Nutrition5kModel(nn.Module):
-    def __init__(self):
+    def __init__(self, tasks=('cal_per_gram_out', 'mass_out'), use_end_relus=True):
         super().__init__()
         self.base_model = torchvision.models.inception_v3(pretrained=True)
-        self.tasks = ['cal_per_gram_out', 'mass_out']
+        self.tasks = tasks
+        self.use_end_relus = use_end_relus
         # Handle the primary net
         self.fc1 = nn.Linear(2048, 4096)
         self.fc2 = nn.Linear(4096, 4096)
@@ -22,7 +43,10 @@ class Nutrition5kModel(nn.Module):
         # Handle the auxiliary net for each task
         self.aux_task_logits = {}
         for task in self.tasks:
-            self.aux_task_logits[task] = InceptionAux(768, 1)
+            if self.use_end_relus:
+                self.aux_task_logits[task] = InceptionAuxNutrition5k(768, 1)
+            else:
+                self.aux_task_logits[task] = InceptionAux(768, 1)
 
     def float(self):
         super().float()
@@ -99,15 +123,19 @@ class Nutrition5kModel(nn.Module):
     def _forward(self, x):
         x, aux = self._forward_inception(x)
         #x = self.average_pooling(x)
-        x = self.fc1(x)
-        x = self.fc2(x)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
 
         # Calculate main outputs
         outputs = []
         for task in self.tasks:
             output = x
-            for layer in self.task_layers[task]:
-                output = layer(output)
+            if self.use_end_relus:
+                output = F.relu(self.task_layers[task][0](output))
+                output = self.task_layers[task][1](output)
+            else:
+                for layer in self.task_layers[task]:
+                    output = layer(output)
             outputs.append(output)
 
         aux_defined = self.base_model.training and self.base_model.aux_logits
