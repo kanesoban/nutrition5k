@@ -3,6 +3,7 @@ import logging
 import os
 from glob import glob
 from shutil import copyfile
+import datetime as dt
 
 '''
 DEBUG_MODE == True is intended for testing code, while 
@@ -41,12 +42,14 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import yaml
 
-from nutrition5k.dataset import Resize, ToTensor, CenterCrop, RandomHorizontalFlip, RandomVerticalFlip, Normalize, Nutrition5kDataset, create_nutrition_df, split_dataframe
+from nutrition5k.dataset import Resize, ToTensor, CenterCrop, RandomHorizontalFlip, RandomVerticalFlip, Normalize, \
+    Nutrition5kDataset, create_nutrition_df, split_dataframe
 from nutrition5k.model import Nutrition5kModel
 from nutrition5k.train_utils import run_epoch
 from nutrition5k.utils import parse_args
 
 SECONDS_TO_HOURS = 3600
+IMAGE_RESOUTION = (299, 299)
 
 
 def create_dataloaders():
@@ -54,17 +57,17 @@ def create_dataloaders():
     train_df, val_df, test_df = split_dataframe(nutrition_df, config['split'])
 
     train_set = Nutrition5kDataset(train_df, config['dataset_dir'], transform=transforms.Compose(
-        [Resize((299, 299)),
+        [Resize(IMAGE_RESOUTION),
          ToTensor(),
          Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]))
 
-    val_set = Nutrition5kDataset(train_df, config['dataset_dir'], transform=transforms.Compose(
-        [Resize((299, 299)),
+    val_set = Nutrition5kDataset(val_df, config['dataset_dir'], transform=transforms.Compose(
+        [Resize(IMAGE_RESOUTION),
          ToTensor(),
          Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]))
 
-    test_set = Nutrition5kDataset(train_df, config['dataset_dir'], transform=transforms.Compose(
-        [Resize((299, 299)),
+    test_set = Nutrition5kDataset(test_df, config['dataset_dir'], transform=transforms.Compose(
+        [Resize(IMAGE_RESOUTION),
          ToTensor(),
          Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])]))
 
@@ -86,7 +89,8 @@ if __name__ == '__main__':
         config = yaml.safe_load(ymlfile)
 
     comment = f' batch_size = {config["batch_size"]} lr = {config["learning_rate"]}'
-    tensorboard = SummaryWriter(comment=comment, log_dir=os.path.join(config['log_dir'], config['experiment_name']))
+    log_dir = os.path.join(config['log_dir'], config['experiment_name'], str(dt.datetime.now()))
+    tensorboard = SummaryWriter(comment=comment, log_dir=log_dir)
 
     copyfile(args.config_path, os.path.join(tensorboard.log_dir, os.path.basename(args.config_path)))
 
