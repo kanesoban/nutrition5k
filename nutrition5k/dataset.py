@@ -104,8 +104,8 @@ def create_nutrition_df(root_dir):
                 dish_id = parts[0]
                 frames_path = os.path.join(root_dir, 'imagery', 'side_angles',
                                            dish_id,
-                                           'camera_A')
-                frame = os.path.join(frames_path, '1.jpg')
+                                           'frames')
+                frame = os.path.join(frames_path, 'camera_A_frame_001.jpeg')
                 if not os.path.exists(frame):
                     continue
 
@@ -142,8 +142,8 @@ class Nutrition5kDataset(Dataset):
             idx = idx.tolist()
 
         frames_path = os.path.join(self.root_dir, 'imagery', 'side_angles', self.dish_calories.iloc[idx]['dish_id'],
-                                   'camera_A')
-        frame = os.path.join(frames_path, '1.jpg')
+                                   'frames')
+        frame = os.path.join(frames_path, 'camera_A_frame_001.jpeg')
 
         image = Image.open(frame)
         image = asarray(image)
