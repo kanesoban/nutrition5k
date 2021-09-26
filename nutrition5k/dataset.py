@@ -70,7 +70,7 @@ class ToTensor:
         # swap color axis because
         # numpy image: H x W x C
         # torch image: C X H X W
-        image = sample['image'].transpose((2, 0, 1))
+        image = sample['image'].transpose((2, 0, 1)).astype(float)
         return {'image': torch.from_numpy(image),
                 'mass': torch.from_numpy(sample['mass']),
                 'calories': torch.from_numpy(sample['calories'])}
