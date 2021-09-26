@@ -1,5 +1,6 @@
 import os
 import random
+from glob import glob
 
 import numpy as np
 from PIL import Image
@@ -91,10 +92,10 @@ class Normalize:
         return sample
 
 
-def create_nutrition_df(root_dir):
+def create_nutrition_df(root_dir, sampling_rate=5):
     csv_files = [os.path.join(root_dir, 'metadata', 'dish_metadata_cafe1.csv'),
                  os.path.join(root_dir, 'metadata', 'dish_metadata_cafe2.csv')]
-    dish_metadata = {'dish_id': [], 'mass': [], 'calories': []}
+    dish_metadata = {'dish_id': [], 'mass': [], 'calories': [], 'frame': []}
     for csv_file in csv_files:
         with open(csv_file, "r") as f:
             for line in f.readlines():
@@ -105,53 +106,70 @@ def create_nutrition_df(root_dir):
                 frames_path = os.path.join(root_dir, 'imagery', 'side_angles',
                                            dish_id,
                                            'frames')
-                frame = os.path.join(frames_path, 'camera_A_frame_001.jpeg')
-                if not os.path.exists(frame):
+                if not os.path.isdir(frames_path):
                     continue
 
-                dish_metadata['dish_id'].append(parts[0])
-                dish_metadata['calories'].append(int(float(parts[1])))
-                dish_metadata['mass'].append(parts[2])
+                frames = sorted(glob(frames_path + os.path.sep + '*.jpeg'))
+                for i, frame in enumerate(frames):
+                    if i % sampling_rate == 0:
+                        dish_metadata['dish_id'].append(parts[0])
+                        dish_metadata['calories'].append(int(float(parts[1])))
+                        dish_metadata['mass'].append(parts[2])
+                        dish_metadata['frame'].append(frame)
 
     return pd.DataFrame.from_dict(dish_metadata)
 
 
 def split_dataframe(dataframe: pd.DataFrame, split):
-    index = list(dataframe.index.copy())
-    samples = len(index)
-    random.shuffle(index)
-    train_end = int(samples * split['train'])
-    val_end = train_end + int(samples * split['validation'])
-    train_index = index[:train_end]
-    val_index = index[train_end:val_end]
-    test_index = index[val_end:]
-    return dataframe.loc[train_index], dataframe.loc[val_index], dataframe.loc[test_index]
+    dish_ids = dataframe.dish_id.unique()
+    random.shuffle(dish_ids)
+    train_end = int(len(dish_ids) * split['train'])
+    train_ids = dish_ids[:train_end]
+    train_df = dataframe[dataframe['dish_id'].isin(train_ids)]
+    train_index = list(train_df.index.copy())
+    random.shuffle(train_index)
+    train_df = train_df.loc[train_index]
+
+    val_end = train_end + int(len(dish_ids) * split['validation'])
+    val_ids = dish_ids[train_end:val_end]
+    val_df = dataframe[dataframe['dish_id'].isin(val_ids)]
+    val_index = list(val_df.index.copy())
+    random.shuffle(val_index)
+    val_df = val_df.loc[val_index]
+
+    test_ids = dish_ids[val_end:]
+    test_df = dataframe[dataframe['dish_id'].isin(test_ids)]
+    test_index = list(test_df.index.copy())
+    random.shuffle(test_index)
+    test_df = test_df.loc[test_index]
+
+    return train_df, val_df, test_df
 
 
 class Nutrition5kDataset(Dataset):
-    def __init__(self, dish_calories, root_dir, transform=None):
-        self.dish_calories = dish_calories
+    def __init__(self, dish_metadata, root_dir, transform=None):
+        self.dish_metadata = dish_metadata
         self.root_dir = root_dir
         self.transform = transform
 
     def __len__(self):
-        return len(self.dish_calories)
+        return len(self.dish_metadata)
 
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        frames_path = os.path.join(self.root_dir, 'imagery', 'side_angles', self.dish_calories.iloc[idx]['dish_id'],
+        frames_path = os.path.join(self.root_dir, 'imagery', 'side_angles', self.dish_metadata.iloc[idx]['dish_id'],
                                    'frames')
         frame = os.path.join(frames_path, 'camera_A_frame_001.jpeg')
 
         image = Image.open(frame)
         image = asarray(image)
 
-        mass = self.dish_calories.iloc[idx]['mass']
+        mass = self.dish_metadata.iloc[idx]['mass']
         mass = np.array([mass])
         mass = mass.astype('float').reshape(1, 1)
-        calories = self.dish_calories.iloc[idx]['calories']
+        calories = self.dish_metadata.iloc[idx]['calories']
         calories = np.array([calories])
         calories = calories.astype('float').reshape(1, 1)
         sample = {'image': image, 'mass': mass, 'calories': calories}
