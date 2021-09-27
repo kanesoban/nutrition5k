@@ -42,6 +42,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import yaml
 
+from nutrition5k import n5kloss
 from nutrition5k.dataset import Resize, ToTensor, CenterCrop, RandomHorizontalFlip, RandomVerticalFlip, Normalize, \
     Nutrition5kDataset, create_nutrition_df, split_dataframe
 from nutrition5k.model import Nutrition5kModel
@@ -106,7 +107,8 @@ if __name__ == '__main__':
 
     # Detect if we have a GPU available
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    model = Nutrition5kModel().float().to(device)
+    task_list = ('calorie', 'mass', 'fat', 'carb', 'protein')
+    model = Nutrition5kModel(task_list).float().to(device)
     # Start training from a checkpoint
     if config['start_checkpoint']:
         previous_epochs = glob(os.path.join(config['start_checkpoint'], 'epochs/*'))
@@ -126,7 +128,7 @@ if __name__ == '__main__':
         else:
             scaler = None
 
-    criterion = torch.nn.L1Loss()
+    criterion = n5kloss
 
     lr_scheduler = ReduceLROnPlateau(optimizer, patience=config['lr_scheduler']['patience'])
 
@@ -148,7 +150,8 @@ if __name__ == '__main__':
                                 config['mixed_precision_enabled'], optimizer=optimizer, scaler=scaler,
                                 lr_scheduler=lr_scheduler,
                                 gradient_acc_steps=config['gradient_acc_steps'],
-                                lr_scheduler_metric=config['lr_scheduler']['metric'])
+                                lr_scheduler_metric=config['lr_scheduler']['metric'],
+                                task_list=task_list)
             if phase == 'train':
                 training_loss = results['average loss']
                 '''
@@ -165,10 +168,10 @@ if __name__ == '__main__':
             tensorboard.add_scalar('{} calorie prediction accuracy'.format(phase),
                                    results['calorie prediction accuracy'], epoch)
             print('Epoch {} {} loss: {:.4f}'.format(epoch, phase, results['average loss']))
-            print('Epoch {} {} mass prediction accuracy: {:.4f}'.format(epoch, phase,
-                                                                        results['mass prediction accuracy']))
-            print('Epoch {} {} calorie prediction accuracy: {:.4f}'.format(epoch, phase,
-                                                                           results['calorie prediction accuracy']))
+            for task in task_list:
+                print('Epoch {} {} {} prediction accuracy: {:.4f}'.format(epoch, phase, task,
+                                                                          results[
+                                                                              '{} prediction accuracy'.format(task)]))
 
         if val_loss and (val_loss < best_val_loss) or (not config['save_best_model_only']):
             epoch_dir = os.path.join(tensorboard.log_dir, 'epoch_{}'.format(epoch))

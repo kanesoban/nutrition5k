@@ -21,7 +21,9 @@ if __name__ == '__main__':
 
     # Detect if we have a GPU available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = Nutrition5kModel().to(device)
+
+    task_list = ('cal', 'mass', 'fat', 'carb', 'protein')
+    model = Nutrition5kModel(task_list).to(device)
     # Load a checkpoint
     model.load_state_dict(torch.load(config['test_checkpoint']))
 
@@ -33,5 +35,5 @@ if __name__ == '__main__':
     time_elapsed = time.time() - since
     print('{} loss: {:.4f}'.format('Test', results['average loss']))
     print('{} mass prediction accuracy: {:.4f}'.format('Test', results['mass prediction accuracy']))
-    print('{} calories prediction accuracy: {:.4f}'.format('Test', results['calories prediction accuracy']))
+    print('{} calorie prediction accuracy: {:.4f}'.format('Test', results['calories prediction accuracy']))
     print('Testing complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))

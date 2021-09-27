@@ -27,7 +27,7 @@ class InceptionAuxNutrition5k(InceptionAux):
 
 
 class Nutrition5kModel(nn.Module):
-    def __init__(self, tasks=('cal_per_gram_out', 'mass_out'), use_end_relus=True):
+    def __init__(self, tasks, use_end_relus=True):
         super().__init__()
         self.base_model = torchvision.models.inception_v3(pretrained=True)
         self.tasks = tasks

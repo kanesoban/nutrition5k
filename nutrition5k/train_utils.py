@@ -62,15 +62,19 @@ def eval_step(model, criterion, inputs, targets, single_input, prediction_thresh
 
 
 def run_epoch(model, criterion, dataloader, device, phase, prediction_threshold, mixed_precision_enabled,
-              optimizer=None, scaler=None, lr_scheduler=None, gradient_acc_steps=None, lr_scheduler_metric='val_loss'):
+              optimizer=None, scaler=None, lr_scheduler=None, gradient_acc_steps=None, lr_scheduler_metric='val_loss',
+              task_list=('calorie', 'mass', 'fat', 'carb', 'protein')):
     running_loss = 0.0
     # Iterate over data.
-    mass_correct_predictions = 0
-    calories_correct_predictions = 0
+    correct_predictions = {}
+    for task in task_list:
+        correct_predictions[task] = 0
+
     for batch_idx, batch in enumerate(dataloader):
         inputs = batch['image']
-        mass = batch['mass']
-        calories = batch['calories']
+        target_list = []
+        for task in task_list:
+            target_list.append(batch[task])
 
         single_input = inputs.shape[0] == 1
         # Training will not work with bs == 1, so we do a 'hack'
@@ -81,21 +85,22 @@ def run_epoch(model, criterion, dataloader, device, phase, prediction_threshold,
         # track history if only in train
         with torch.set_grad_enabled(phase == 'train'):
             # Calculate actual targets
-            targets = torch.squeeze(torch.cat([mass, calories], axis=1))
+            targets = torch.squeeze(torch.cat(target_list, axis=1))
             if len(targets.shape) == 1:
                 targets = torch.unsqueeze(targets, 0)
 
             inputs = inputs.float().to(device)
             targets = targets.float().to(device)
             if phase == 'train':
-                correct_predictions, loss = train_step(model, optimizer, criterion, inputs, targets, single_input,
+                task_correct_predictions, loss = train_step(model, optimizer, criterion, inputs, targets, single_input,
                                                        prediction_threshold, mixed_precision_enabled, scaler=scaler,
                                                        batch_idx=batch_idx, gradient_acc_steps=gradient_acc_steps)
             else:
-                correct_predictions, loss = eval_step(model, criterion, inputs, targets, single_input,
+                task_correct_predictions, loss = eval_step(model, criterion, inputs, targets, single_input,
                                                       prediction_threshold)
-            mass_correct_predictions += np.sum(correct_predictions[:, 0])
-            calories_correct_predictions += np.sum(correct_predictions[:, 1])
+
+            for i, task in enumerate(task_list):
+                correct_predictions[task] += np.sum(task_correct_predictions[:, i])
 
         # statistics
         current_loss = loss.item() * inputs.size(0)
@@ -103,8 +108,11 @@ def run_epoch(model, criterion, dataloader, device, phase, prediction_threshold,
     if (lr_scheduler_metric == 'val_loss' and phase == 'val') or (lr_scheduler_metric == 'train_loss' and phase == 'train'):
         lr_scheduler.step(running_loss)
 
-    return {
-        'average loss': running_loss / len(dataloader.dataset),
-        'mass prediction accuracy': mass_correct_predictions / len(dataloader.dataset),
-        'calorie prediction accuracy': calories_correct_predictions / len(dataloader.dataset)
+    results = {
+        'average loss': running_loss / len(dataloader.dataset)
     }
+
+    for task in task_list:
+        results['{} prediction accuracy'.format(task)] = correct_predictions[task] / len(dataloader.dataset)
+
+    return results

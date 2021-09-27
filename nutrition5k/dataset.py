@@ -70,10 +70,11 @@ class ToTensor:
         # swap color axis because
         # numpy image: H x W x C
         # torch image: C X H X W
-        image = sample['image'].transpose((2, 0, 1)).astype(float)
-        return {'image': torch.from_numpy(image),
-                'mass': torch.from_numpy(sample['mass']),
-                'calories': torch.from_numpy(sample['calories'])}
+        sample['image'] = torch.from_numpy(sample['image'].transpose((2, 0, 1)).astype(float))
+        keys = set(sample.keys()).difference(['image'])
+        for key in keys:
+            sample[key] = torch.from_numpy(sample[key])
+        return sample
 
 
 class Normalize:
@@ -87,7 +88,7 @@ class Normalize:
 
     def __call__(self, sample):
         sample['mass'] = sample['mass'] / self.mass_max
-        sample['calories'] = sample['calories'] / self.calories_max
+        sample['calorie'] = sample['calorie'] / self.calories_max
         sample['image'] = functional.normalize(sample['image'], self.means, self.stds)
         return sample
 
@@ -95,13 +96,12 @@ class Normalize:
 def create_nutrition_df(root_dir, sampling_rate=5):
     csv_files = [os.path.join(root_dir, 'metadata', 'dish_metadata_cafe1.csv'),
                  os.path.join(root_dir, 'metadata', 'dish_metadata_cafe2.csv')]
-    dish_metadata = {'dish_id': [], 'mass': [], 'calories': [], 'frame': []}
+    dish_metadata = {'dish_id': [], 'mass': [], 'calorie': [], 'fat': [], 'carb': [], 'protein': [], 'frame': []}
     for csv_file in csv_files:
         with open(csv_file, "r") as f:
             for line in f.readlines():
                 parts = line.split(',')
 
-                # Temporary hack before i can fix the data extraction
                 dish_id = parts[0]
                 frames_path = os.path.join(root_dir, 'imagery', 'side_angles',
                                            dish_id,
@@ -113,8 +113,11 @@ def create_nutrition_df(root_dir, sampling_rate=5):
                 for i, frame in enumerate(frames):
                     if i % sampling_rate == 0:
                         dish_metadata['dish_id'].append(parts[0])
-                        dish_metadata['calories'].append(int(float(parts[1])))
+                        dish_metadata['calorie'].append(int(float(parts[1])))
                         dish_metadata['mass'].append(parts[2])
+                        dish_metadata['fat'].append(parts[3])
+                        dish_metadata['carb'].append(parts[4])
+                        dish_metadata['protein'].append(parts[5])
                         dish_metadata['frame'].append(frame)
 
     return pd.DataFrame.from_dict(dish_metadata)
@@ -146,6 +149,11 @@ def split_dataframe(dataframe: pd.DataFrame, split):
     return train_df, val_df, test_df
 
 
+def to_ndarray(value):
+    value = np.array([value])
+    return value.astype('float').reshape(1, 1)
+
+
 class Nutrition5kDataset(Dataset):
     def __init__(self, dish_metadata, root_dir, transform=None):
         self.dish_metadata = dish_metadata
@@ -166,13 +174,13 @@ class Nutrition5kDataset(Dataset):
         image = Image.open(frame)
         image = asarray(image)
 
-        mass = self.dish_metadata.iloc[idx]['mass']
-        mass = np.array([mass])
-        mass = mass.astype('float').reshape(1, 1)
-        calories = self.dish_metadata.iloc[idx]['calories']
-        calories = np.array([calories])
-        calories = calories.astype('float').reshape(1, 1)
-        sample = {'image': image, 'mass': mass, 'calories': calories}
+        calories = to_ndarray(self.dish_metadata.iloc[idx]['calorie'])
+        mass = to_ndarray(self.dish_metadata.iloc[idx]['mass'])
+        fat = to_ndarray(self.dish_metadata.iloc[idx]['fat'])
+        carb = to_ndarray(self.dish_metadata.iloc[idx]['carb'])
+        protein = to_ndarray(self.dish_metadata.iloc[idx]['protein'])
+
+        sample = {'image': image, 'mass': mass, 'fat': fat, 'carb': carb, 'protein': protein, 'calorie': calories}
 
         if self.transform:
             sample = self.transform(sample)
