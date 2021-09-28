@@ -167,9 +167,7 @@ class Nutrition5kDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        frames_path = os.path.join(self.root_dir, 'imagery', 'side_angles', self.dish_metadata.iloc[idx]['dish_id'],
-                                   'frames')
-        frame = os.path.join(frames_path, 'camera_A_frame_001.jpeg')
+        frame = self.dish_metadata.iloc[idx]['frame']
 
         image = Image.open(frame)
         image = asarray(image)
