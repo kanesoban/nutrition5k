@@ -15,27 +15,35 @@ class Metrics:
     def __init__(self, task_list, device, prediction_threshold):
         self.task_list = task_list
         self.mean_absolute_errors = {}
-        self.accuracies = {}
+        self.n5k_relative_mae = {}
+        self.my_relative_mae = {}
+        self.thresholded_accuracy = {}
         for idx, task in enumerate(self.task_list):
             self.mean_absolute_errors[task] = MeanAbsoluteError(idx, device)
-            self.accuracies[task] = Accuracy(idx, device, prediction_threshold)
+            self.n5k_relative_mae[task] = N5kRelativeMAE(idx, device)
+            self.my_relative_mae[task] = MeanRelativeError(idx, device)
+            self.thresholded_accuracy[task] = ThresholdedAccuracy(idx, device, prediction_threshold)
 
     def update(self, preds: torch.Tensor, target: torch.Tensor):
         for idx, task in enumerate(self.task_list):
             self.mean_absolute_errors[task].update(preds, target)
-            self.accuracies[task].update(preds, target)
+            self.n5k_relative_mae[task].update(preds, target)
+            self.my_relative_mae[task].update(preds, target)
+            self.thresholded_accuracy[task].update(preds, target)
 
     def compute(self):
         metrics = {}
         for idx, task in enumerate(self.task_list):
             metrics['{} mean average error'.format(task)] = self.mean_absolute_errors[task].compute()
-            metrics['{} accuracy'.format(task)] = self.accuracies[task].compute()
+            metrics['{} n5k relative mean average error'.format(task)] = self.n5k_relative_mae[task].compute()
+            #metrics['{} my relative mean average error'.format(task)] = self.my_relative_mae[task].compute()
+            #metrics['{} thresholded accuracy'.format(task)] = self.thresholded_accuracy[task].compute()
         return metrics
 
     def reset(self):
         for idx, task in enumerate(self.task_list):
             self.mean_absolute_errors[task].reset()
-            self.accuracies[task].reset()
+            self.n5k_relative_mae[task].reset()
 
 
 class MeanAbsoluteError(Metric):
@@ -86,7 +94,28 @@ class MeanRelativeError(Metric):
         return self.relative_error / self.total
 
 
-class Accuracy(Metric):
+class N5kRelativeMAE(Metric):
+    def __init__(self, task_idx, device, dist_sync_on_step=False):
+        super().__init__(dist_sync_on_step=dist_sync_on_step)
+
+        self.task_idx = task_idx
+        self.task_mean = (255.0, 215.0, 12.7, 19.4, 18.0)[task_idx]
+        self.add_state("error", default=torch.tensor(0).float().to(device), dist_reduce_fx="sum")
+        self.add_state("total", default=torch.tensor(0).float().to(device), dist_reduce_fx="sum")
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor):
+        assert preds.shape == target.shape
+
+        n_samples = target.numel()
+        self.error += torch.sum(torch.tensor(torch.abs(
+            preds[:, self.task_idx] - target[:, self.task_idx]) / self.task_mean))
+        self.total += n_samples
+
+    def compute(self):
+        return self.error / self.total
+
+
+class ThresholdedAccuracy(Metric):
     def __init__(self, task_idx, device, prediction_threshold, dist_sync_on_step=False):
         super().__init__(dist_sync_on_step=dist_sync_on_step)
 

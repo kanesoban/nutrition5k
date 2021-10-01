@@ -19,3 +19,4 @@ experiment_name: 'baseline'
 lr_scheduler:
   patience: 2
   metric: 'val_loss'
+task_list: ['calorie', 'mass', 'fat', 'carb', 'protein']

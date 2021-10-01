@@ -94,31 +94,29 @@ class Normalize:
 
 
 def create_nutrition_df(root_dir, sampling_rate=5):
-    csv_files = [os.path.join(root_dir, 'metadata', 'dish_metadata_cafe1.csv'),
-                 os.path.join(root_dir, 'metadata', 'dish_metadata_cafe2.csv')]
+    csv_file = os.path.join(root_dir, 'metadata', 'dish_metadata_cafe1.csv')
     dish_metadata = {'dish_id': [], 'mass': [], 'calorie': [], 'fat': [], 'carb': [], 'protein': [], 'frame': []}
-    for csv_file in csv_files:
-        with open(csv_file, "r") as f:
-            for line in f.readlines():
-                parts = line.split(',')
+    with open(csv_file, "r") as f:
+        for line in f.readlines():
+            parts = line.split(',')
 
-                dish_id = parts[0]
-                frames_path = os.path.join(root_dir, 'imagery', 'side_angles',
-                                           dish_id,
-                                           'frames')
-                if not os.path.isdir(frames_path):
-                    continue
+            dish_id = parts[0]
+            frames_path = os.path.join(root_dir, 'imagery', 'side_angles',
+                                       dish_id,
+                                       'frames')
+            if not os.path.isdir(frames_path):
+                continue
 
-                frames = sorted(glob(frames_path + os.path.sep + '*.jpeg'))
-                for i, frame in enumerate(frames):
-                    if i % sampling_rate == 0:
-                        dish_metadata['dish_id'].append(parts[0])
-                        dish_metadata['calorie'].append(int(float(parts[1])))
-                        dish_metadata['mass'].append(parts[2])
-                        dish_metadata['fat'].append(parts[3])
-                        dish_metadata['carb'].append(parts[4])
-                        dish_metadata['protein'].append(parts[5])
-                        dish_metadata['frame'].append(frame)
+            frames = sorted(glob(frames_path + os.path.sep + '*.jpeg'))
+            for i, frame in enumerate(frames):
+                if i % sampling_rate == 0:
+                    dish_metadata['dish_id'].append(parts[0])
+                    dish_metadata['calorie'].append(int(float(parts[1])))
+                    dish_metadata['mass'].append(parts[2])
+                    dish_metadata['fat'].append(parts[3])
+                    dish_metadata['carb'].append(parts[4])
+                    dish_metadata['protein'].append(parts[5])
+                    dish_metadata['frame'].append(frame)
 
     return pd.DataFrame.from_dict(dish_metadata)
 
