@@ -47,7 +47,7 @@ from nutrition5k.dataset import Resize, ToTensor, CenterCrop, RandomHorizontalFl
     Nutrition5kDataset, create_nutrition_df, split_dataframe
 from nutrition5k.model import Nutrition5kModel
 from nutrition5k.train_utils import run_epoch
-from nutrition5k.utils import parse_args
+from nutrition5k.utils import parse_args, Metrics
 
 SECONDS_TO_HOURS = 3600
 IMAGE_RESOUTION = (299, 299)
@@ -107,8 +107,7 @@ if __name__ == '__main__':
 
     # Detect if we have a GPU available
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    task_list = ('calorie', 'mass', 'fat', 'carb', 'protein')
-    model = Nutrition5kModel(task_list).float().to(device)
+    model = Nutrition5kModel(config['task_list']).float().to(device)
     # Start training from a checkpoint
     if config['start_checkpoint']:
         previous_epochs = glob(os.path.join(config['start_checkpoint'], 'epochs/*'))
@@ -131,6 +130,7 @@ if __name__ == '__main__':
     criterion = n5kloss
 
     lr_scheduler = ReduceLROnPlateau(optimizer, patience=config['lr_scheduler']['patience'])
+    metrics = Metrics(config['task_list'], device, config['prediction_threshold'])
 
     best_model_path = None
 
@@ -146,12 +146,13 @@ if __name__ == '__main__':
                 model.train()
             else:
                 model.eval()
-            results = run_epoch(model, criterion, dataloaders[phase], device, phase, config['prediction_threshold'],
+            results = run_epoch(model, criterion, dataloaders[phase], device, phase,
                                 config['mixed_precision_enabled'], optimizer=optimizer, scaler=scaler,
                                 lr_scheduler=lr_scheduler,
                                 gradient_acc_steps=config['gradient_acc_steps'],
                                 lr_scheduler_metric=config['lr_scheduler']['metric'],
-                                task_list=task_list)
+                                task_list=config['task_list'],
+                                metrics=metrics)
             if phase == 'train':
                 training_loss = results['average loss']
                 '''
@@ -162,16 +163,16 @@ if __name__ == '__main__':
             else:
                 val_loss = results['average loss']
 
+            metrics_results = metrics.compute()
+            metrics.reset()
+
             tensorboard.add_scalar('{} loss'.format(phase), results['average loss'], epoch)
-            tensorboard.add_scalar('{} mass prediction accuracy'.format(phase), results['mass prediction accuracy'],
-                                   epoch)
-            tensorboard.add_scalar('{} calorie prediction accuracy'.format(phase),
-                                   results['calorie prediction accuracy'], epoch)
             print('Epoch {} {} loss: {:.4f}'.format(epoch, phase, results['average loss']))
-            for task in task_list:
-                print('Epoch {} {} {} prediction accuracy: {:.4f}'.format(epoch, phase, task,
-                                                                          results[
-                                                                              '{} prediction accuracy'.format(task)]))
+
+            for task, metric_value in metrics_results.items():
+                metric_name = '{} {}'.format(phase, task)
+                print('Epoch {} {}: {:.4f}'.format(epoch, metric_name, metric_value))
+                tensorboard.add_scalar(metric_name, metric_value, epoch)
 
         if val_loss and (val_loss < best_val_loss) or (not config['save_best_model_only']):
             epoch_dir = os.path.join(tensorboard.log_dir, 'epoch_{}'.format(epoch))

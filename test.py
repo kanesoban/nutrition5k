@@ -22,8 +22,7 @@ if __name__ == '__main__':
     # Detect if we have a GPU available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    task_list = ('cal', 'mass', 'fat', 'carb', 'protein')
-    model = Nutrition5kModel(task_list).to(device)
+    model = Nutrition5kModel(config['task_list']).to(device)
     # Load a checkpoint
     model.load_state_dict(torch.load(config['test_checkpoint']))
 

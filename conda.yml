@@ -17,6 +17,7 @@ dependencies:
   - scikit-image
   - tensorboard
   - pandas
+  - torchmetrics
   - pip:
       - ffmpeg
       - opencv_python
